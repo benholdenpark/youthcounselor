@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>강화·처벌 판별 훈련</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column workbook; a 2x2 answer grid that mirrors the 강화/처벌 × 정적/부적 matrix */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --ink:#1d2a26; --muted:#5c6b66; --line:#d6ddd9;
+  --accent:#1f6b5c; --accent-soft:#e1efe9;
+  --up:#2f6fb3; --down:#b4532f;
+  --ok:#2d7a46; --ok-soft:#e3f2e7; --bad:#b03a3a; --bad-soft:#f8e4e2;
+  --display:"Gowun Batang", "Nanum Myeongjo", serif;
+  --body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141b19; --surface:#1c2523; --ink:#e4ebe8; --muted:#9aaaa4; --line:#2f3b38;
+  --accent:#6cc2ab; --accent-soft:#1f3631; --up:#7fb2ea; --down:#e7936f;
+  --ok:#78c992; --ok-soft:#1d3426; --bad:#ec8c84; --bad-soft:#3a2221; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141b19; --surface:#1c2523; --ink:#e4ebe8; --muted:#9aaaa4; --line:#2f3b38;
+  --accent:#6cc2ab; --accent-soft:#1f3631; --up:#7fb2ea; --down:#e7936f;
+  --ok:#78c992; --ok-soft:#1d3426; --bad:#ec8c84; --bad-soft:#3a2221; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.65}
+.wrap{max-width:720px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--display);font-size:1.9rem;line-height:1.25;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.eyebrow{font-size:.78rem;letter-spacing:.08em;color:var(--accent);font-weight:600}
+.rule{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.rule summary{cursor:pointer;font-weight:600}
+.rule ol{margin:10px 0 0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+.matrix{margin-top:12px;overflow-x:auto}
+.matrix table{border-collapse:collapse;width:100%;font-size:.92rem;table-layout:fixed}
+.matrix th,.matrix td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;word-break:keep-all}
+.matrix tr>*:first-child{width:4.6em}
+.matrix th{background:var(--accent-soft);font-weight:600}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tab{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:999px;cursor:pointer;flex:1 1 0;white-space:nowrap}
+.tab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.progress{display:flex;justify-content:space-between;align-items:center;font-size:.9rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .25s}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.qno{font-size:.8rem;font-weight:600;color:var(--muted);letter-spacing:.05em}
+.tag{display:inline-block;margin-left:6px;font-size:.72rem;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.prompt{font-size:1.08rem;margin:0}
+.grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:stretch}
+.grid .lab{font-size:.8rem;color:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:600}
+.grid .lab.col{padding-bottom:2px}
+.grid .lab.up{color:var(--up)} .grid .lab.down{color:var(--down)}
+.opt{font:inherit;font-weight:500;min-height:56px;padding:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;cursor:pointer;transition:border-color .15s,background .15s}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt:focus-visible,.tab:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.opt.right{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.opt:disabled{cursor:default}
+.fb{border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.fb.ok{background:var(--ok-soft)} .fb.no{background:var(--bad-soft)}
+.fb strong{font-size:1rem}
+.steps{display:flex;flex-direction:column;gap:4px;font-size:.95rem}
+.steps b{font-weight:600}
+.note{font-size:.92rem;color:var(--muted)}
+.actions{display:flex;justify-content:flex-end;gap:8px}
+.btn{font:inherit;font-weight:600;border:none;background:var(--accent);color:var(--bg);padding:10px 18px;border-radius:10px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.result h2{font-family:var(--display);font-size:1.5rem;margin:0}
+.score{font-size:2.4rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent)}
+.misslist{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.misslist li{border-top:1px solid var(--line);padding-top:10px;font-size:.95rem}
+.misslist .ans{color:var(--muted);font-size:.88rem}
+@media (max-width:480px){.tabs{grid-template-columns:repeat(2,1fr)}.wrap{gap:16px;padding-block:18px 40px}h1{font-size:1.6rem}.rule{padding:12px 14px}.matrix table{font-size:.85rem}.matrix th,.matrix td{padding:6px 8px}.tab{padding:8px 6px;font-size:.92rem}.card{padding:16px}.grid{grid-template-columns:2.4em 1fr 1fr;gap:6px}.grid .lab.row{font-size:.75rem;line-height:1.2;text-align:center}.opt{min-height:52px;padding:8px 6px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">학습이론</div>
+    <h1>강화·처벌 판별 훈련</h1>
+    <p class="sub">스키너의 조작적 조건화. 장면을 읽고 2×2 칸 중 하나를 고르세요. 고난도는 이름에 속기 쉬운 문제와 '누구의 행동인가'를 묻는 문제예요.</p>
+  </header>
+
+  <details class="rule" id="rule" open>
+    <summary>판별 공식</summary>
+    <ol>
+      <li><b>마지막 문장 끝 단어</b>를 본다. "늘었다" → <b>강화</b>, "줄었다" → <b>처벌</b></li>
+      <li>결과로 무언가가 <b>등장</b>했나, <b>퇴장</b>했나? 등장 → <b>정적(＋)</b>, 퇴장 → <b>부적(−)</b></li>
+      <li>좋다/나쁘다는 판단에 쓰지 않는다. 싫은 것이 등장해도 정적, 싫은 것이 퇴장해도 부적.</li>
+    </ol>
+    <div class="matrix">
+      <table>
+        <tr><th></th><th>정적 ＋<br>등장</th><th>부적 −<br>퇴장</th></tr>
+        <tr><th>강화<br>행동 ↑</th><td>발표하면 칭찬 스티커</td><td>지각 없으면 청소 면제</td></tr>
+        <tr><th>처벌<br>행동 ↓</th><td>떠들면 반성문</td><td>휴대폰 쓰면 압수</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <div class="tabs" role="group" aria-label="문제 세트">
+    <button class="tab" id="tab-basic" data-set="basic" aria-pressed="true">기본 12</button>
+    <button class="tab" id="tab-trap" data-set="trap" aria-pressed="false">함정 10</button>
+    <button class="tab" id="tab-hard" data-set="hard" aria-pressed="false">고난도 12</button>
+    <button class="tab" id="tab-all" data-set="all" aria-pressed="false">전체 34</button>
+  </div>
+
+  <div>
+    <div class="progress"><span id="pos"></span><span id="sc"></span></div>
+    <div class="bar"><i id="barfill" style="width:0"></i></div>
+  </div>
+
+  <section id="stage"></section>
+</div>
+
+<script>
+const LABEL={'up+':'정적 강화','up-':'부적 강화','down+':'정적 처벌','down-':'부적 처벌'};
+const Q={
+basic:[
+ {t:"수업 시간에 발표를 하면 선생님이 칭찬 스티커를 주었다. 그 뒤로 학생의 발표 횟수가 늘었다.",b:'up',s:'+',w:"칭찬 스티커가 등장"},
+ {t:"수업 중에 떠든 학생에게 방과 후 남아서 반성문을 쓰게 했다. 그 뒤로 학생이 떠드는 행동이 줄었다.",b:'down',s:'+',w:"반성문이 등장",n:"싫은 일이어도 '생긴' 것이므로 정적이에요."},
+ {t:"친구를 때린 학생에게 일주일 동안 축구부 활동을 금지했다. 그 뒤로 학생의 폭력 행동이 줄었다.",b:'down',s:'-',w:"축구부 활동이 퇴장"},
+ {t:"한 주 동안 지각을 한 번도 하지 않으면 금요일 청소를 면제해 주었다. 그 뒤로 정시 등교가 늘었다.",b:'up',s:'-',w:"청소가 퇴장",n:"'면제'라는 말이 보이면 부적을 떠올리세요."},
+ {t:"늦게 귀가한 중학생의 이번 달 용돈을 깎았다. 그 뒤로 늦게 귀가하는 일이 줄었다.",b:'down',s:'-',w:"용돈 일부가 퇴장",n:"벌금도 같은 원리예요."},
+ {t:"자동차에서 안전벨트를 매지 않으면 경고음이 계속 울리고, 벨트를 매면 소리가 멈춘다. 운전자는 차에 타자마자 벨트를 매는 습관이 생겼다.",b:'up',s:'-',w:"경고음이 퇴장",n:"교과서에 자주 나오는 대표 예시예요."},
+ {t:"시험공부를 열심히 해서 성적이 오르자 부모님이 용돈을 더 주셨다. 그 뒤로 시험공부 시간이 늘었다.",b:'up',s:'+',w:"추가 용돈이 등장",n:"같은 용돈이라도 더하면 정적, 빼면 부적이에요."},
+ {t:"숙제를 안 해 온 학생에게 운동장 다섯 바퀴를 뛰게 했다. 그 뒤로 숙제를 안 해 오는 일이 줄었다.",b:'down',s:'+',w:"운동장 뛰기가 등장"},
+ {t:"두통이 있을 때 진통제를 먹었더니 통증이 사라졌다. 그 뒤로 머리가 아플 때마다 진통제를 먹는 행동이 늘었다.",b:'up',s:'-',w:"두통이 퇴장",n:"이미 있는 불쾌한 상태에서 벗어나는 것을 '도피 학습'이라고 해요."},
+ {t:"수업 중 휴대폰을 사용하다 걸린 학생의 휴대폰을 하루 동안 압수했다. 그 뒤로 수업 중 휴대폰 사용이 줄었다.",b:'down',s:'-',w:"휴대폰이 퇴장",n:"타임아웃도 부적 처벌이에요."},
+ {t:"마트에서 아이가 울며 떼를 쓰자 엄마가 과자를 사 주었고, 아이는 울음을 그쳤다. 그 뒤로 '아이가 떼쓰는 행동'이 늘었다. 아이의 행동에 작용한 원리는?",b:'up',s:'+',w:"아이에게 과자가 등장"},
+ {t:"위와 같은 상황에서, 그 뒤로 '엄마가 떼쓰는 아이에게 과자를 사 주는 행동'도 늘었다. 엄마의 행동에 작용한 원리는?",b:'up',s:'-',w:"엄마에게 불쾌한 아이 울음이 퇴장",n:"누구의 행동인지에 따라 답이 달라져요. 아이는 정적 강화, 엄마는 부적 강화를 받아 악순환이 생겼어요."}
+],
+trap:[
+ {t:"복도에서 뛰다 걸린 학생에게 화장실 청소를 시켰다. 그 뒤로 복도에서 뛰는 행동이 줄었다.",b:'down',s:'+',w:"화장실 청소가 등장"},
+ {t:"아침마다 시끄러운 알람이 울리는데, 일어나서 끄면 소리가 멈춘다. 그 뒤로 알람이 울리면 바로 일어나는 행동이 늘었다.",b:'up',s:'-',w:"알람 소리가 퇴장"},
+ {t:"수업 중 욕을 한 학생을 선생님이 큰 소리로 꾸짖었다. 그 뒤로 학생이 욕하는 행동이 줄었다.",b:'down',s:'+',w:"꾸중이 등장",n:"꾸중, 잔소리, 벌 과제처럼 '싫은 것을 주는' 건 정적 처벌이에요."},
+ {t:"매일 영어 단어를 외우면 주말 학원 숙제를 줄여 주기로 했다. 그 뒤로 단어를 외우는 날이 늘었다.",b:'up',s:'-',w:"학원 숙제 일부가 퇴장"},
+ {t:"무단 조퇴를 한 학생에게 벌점을 부과했다. 그 뒤로 무단 조퇴가 줄었다.",b:'down',s:'+',w:"벌점이 등장",n:"벌점은 '깎는' 게 아니라 '쌓이는' 것이에요. 상점을 깎았다면 부적 처벌이 돼요."},
+ {t:"시험 때마다 불안이 심했던 학생이 미리 공부를 해 두었더니 시험 전 불안이 생기지 않았다. 그 뒤로 미리 공부하는 행동이 늘었다.",b:'up',s:'-',w:"불안이 퇴장(생기기 전에 막음)",n:"불쾌한 자극이 오기 전에 미리 피하는 것을 '회피 학습'이라고 해요."},
+ {t:"지각한 학생의 점심시간 자유시간을 10분 줄였다. 그 뒤로 지각이 줄었다.",b:'down',s:'-',w:"자유시간이 퇴장"},
+ {t:"수업 중 졸던 학생에게 앞에 나와 칠판에 문제를 풀게 했다. 그 뒤로 수업 중 조는 행동이 줄었다.",b:'down',s:'+',w:"앞에 나가 문제 풀기가 등장"},
+ {t:"잔소리하는 엄마를 피하려고 엄마가 잠든 뒤에 집에 들어갔더니 잔소리를 듣지 않았다. 그 뒤로 늦게 귀가하는 행동이 늘었다.",b:'up',s:'-',w:"잔소리가 퇴장",n:"늦게 귀가하는 '나쁜 행동'도 늘었으면 강화예요. 강화는 좋은 행동만 키우지 않아요."},
+ {t:"청소를 열심히 한 모둠에게 그날 숙제 하나를 면제해 주었다. 그 뒤로 모둠원들이 청소를 열심히 하는 행동이 늘었다.",b:'up',s:'-',w:"숙제가 퇴장"}
+],
+hard:[
+ {t:"수업 중 장난을 치는 학생을 교사가 그때마다 큰 소리로 꾸짖었다. 그런데 오히려 장난치는 행동이 늘었다.",b:'up',s:'+',w:"교사의 꾸중(관심)이 등장",n:"꾸중이라는 이름에 끌리면 안 돼요. 결과적으로 행동이 늘었다면 그 꾸중은 처벌이 아니라 강화로 작용한 거예요. 관심을 끌고 싶은 학생에게는 꾸중도 보상이 될 수 있어요."},
+ {t:"반에서 욕을 하자 친구들이 재밌다며 웃어 주었다. 그 뒤로 학생이 욕하는 행동이 늘었다.",b:'up',s:'+',w:"친구들의 웃음이 등장",n:"바람직하지 않은 행동도 늘었으면 강화예요."},
+ {t:"벌점이 쌓인 학생이 교내 봉사활동을 하면 벌점을 지워 주기로 했다. 그 뒤로 봉사활동에 참여하는 행동이 늘었다.",b:'up',s:'-',w:"벌점이 퇴장",n:"'벌점'이라는 단어 때문에 처벌로 착각하기 쉬워요. 행동이 늘었고 벌점이 사라졌으니 부적 강화예요."},
+ {t:"과제를 기한보다 늦게 내면 수행평가 점수에서 감점했다. 그 뒤로 과제를 늦게 내는 일이 줄었다.",b:'down',s:'-',w:"점수 일부가 퇴장",n:"함정 5번의 벌점과 비교해 보세요. 벌점은 '쌓이는' 것이라 정적 처벌, 감점은 '깎이는' 것이라 부적 처벌이에요."},
+ {t:"수업에 들어가기 싫은 학생이 배가 아프다고 하면 교사가 보건실에 보내 주었다. 그 뒤로 이 학생이 복통을 호소하는 일이 늘었다.",b:'up',s:'-',w:"싫어하는 수업이 퇴장",n:"보건실에 가는 것이 '등장'처럼 보이지만, 학생에게 의미 있는 결과는 싫은 수업에서 빠져나간 것이에요. 무엇이 행동을 유지시키는지를 보세요."},
+ {t:"흡연하는 청소년이 담배를 피우면 초조하고 불편한 금단 증상이 사라졌다. 그 뒤로 흡연 횟수가 늘었다.",b:'up',s:'-',w:"금단 증상이 퇴장",n:"중독 행동이 유지되는 대표적인 원리가 부적 강화예요. 상담 장면에서도 자주 쓰는 설명이에요."},
+ {t:"수업 중 엎드려 자는 학생 옆으로 교사가 다가가 서 있으면 학생이 일어나 앉았다. 그 뒤로 엎드린 학생이 있으면 교사가 다가가는 행동이 늘었다. 교사의 행동에 작용한 원리는?",b:'up',s:'-',w:"교사에게 불편한 '엎드린 학생' 장면이 퇴장",n:"누구의 행동인지 먼저 확인하세요. 이 문제의 주인공은 교사예요."},
+ {t:"동생을 괴롭힌 형에게서 부모가 그날 하루 게임기를 치웠다. 그 뒤로 형이 동생을 괴롭히는 행동이 줄었다.",b:'down',s:'-',w:"게임기가 퇴장"},
+ {t:"위 상황에서, 동생이 부모에게 '형이 괴롭혀'라고 이르면 형의 괴롭힘이 멈추었다. 그 뒤로 동생이 부모에게 이르는 행동이 늘었다. 동생의 행동에 작용한 원리는?",b:'up',s:'-',w:"형의 괴롭힘이 퇴장",n:"같은 장면에서 형은 부적 처벌, 동생은 부적 강화를 받았어요."},
+ {t:"중간고사를 대충 본 학생에게 부모가 주말 학원 수업을 하나 더 등록했다. 그 뒤로 시험을 대충 보는 행동이 줄었다.",b:'down',s:'+',w:"추가 학원 수업이 등장"},
+ {t:"단체 대화방에 친구 험담을 올린 학생의 대화방 사용 권한을 일주일간 정지했다. 그 뒤로 험담을 올리는 행동이 줄었다.",b:'down',s:'-',w:"대화방 사용 권한이 퇴장"},
+ {t:"발표할 때마다 친구들이 목소리를 흉내 내며 놀렸다. 그 뒤로 이 학생이 손을 들고 발표하는 행동이 줄었다.",b:'down',s:'+',w:"친구들의 놀림이 등장",n:"교사가 의도하지 않아도 처벌은 일어나요. 또래의 반응이 학생의 행동을 바꾼 사례예요."}
+]};
+Q.all=[...Q.basic.map((q,i)=>({...q,src:'기본 '+(i+1)})),...Q.trap.map((q,i)=>({...q,src:'함정 '+(i+1)})),...Q.hard.map((q,i)=>({...q,src:'고난도 '+(i+1)}))];
+Q.hard.forEach((q,i)=>q.src='고난도 '+(i+1));
+Q.basic.forEach((q,i)=>q.src='기본 '+(i+1));
+Q.trap.forEach((q,i)=>q.src='함정 '+(i+1));
+
+let set='basic',idx=0,score=0,answered=false,misses=[];
+const stage=document.getElementById('stage');
+const $=id=>document.getElementById(id);
+
+function start(s){
+  set=s;idx=0;score=0;misses=[];
+  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-pressed',t.dataset.set===s?'true':'false'));
+  render();
+}
+function header(){
+  const list=Q[set];
+  $('pos').textContent=idx<list.length?`${idx+1} / ${list.length}`:`완료`;
+  $('sc').textContent=`정답 ${score}`;
+  $('barfill').style.width=(Math.min(idx,list.length)/list.length*100)+'%';
+}
+function render(){
+  answered=false;header();
+  const list=Q[set];
+  if(idx>=list.length)return result();
+  const q=list[idx];
+  stage.innerHTML=`<div class="card">
+    <div class="qno">${q.src}</div>
+    <p class="prompt">${q.t}</p>
+    <div class="grid" role="group" aria-label="답 고르기">
+      <span class="corner"></span><span class="lab col">정적 (＋)</span><span class="lab col">부적 (−)</span>
+      <span class="lab row up">강화<br>↑</span>
+      <button class="opt" id="o-up-p" data-k="up+">정적 강화</button>
+      <button class="opt" id="o-up-m" data-k="up-">부적 강화</button>
+      <span class="lab row down">처벌<br>↓</span>
+      <button class="opt" id="o-dn-p" data-k="down+">정적 처벌</button>
+      <button class="opt" id="o-dn-m" data-k="down-">부적 처벌</button>
+    </div>
+    <div id="fb"></div>
+  </div>`;
+  stage.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>pick(b)));
+}
+function pick(btn){
+  if(answered)return;answered=true;
+  const q=Q[set][idx],key=q.b+q.s,ok=btn.dataset.k===key;
+  stage.querySelectorAll('.opt').forEach(b=>{b.disabled=true;if(b.dataset.k===key)b.classList.add('right')});
+  if(ok)score++;else{btn.classList.add('wrong');misses.push({q,mine:LABEL[btn.dataset.k]})}
+  const last=idx===Q[set].length-1;
+  $('fb').innerHTML=`<div class="fb ${ok?'ok':'no'}">
+    <strong>${ok?'정답이에요.':'정답은 '+LABEL[key]+'예요.'}</strong>
+    <div class="steps">
+      <div><b>1단계</b> 행동이 ${q.b==='up'?'늘었다 → 강화':'줄었다 → 처벌'}</div>
+      <div><b>2단계</b> ${q.w} → ${q.s==='+'?'정적(＋)':'부적(−)'}</div>
+    </div>
+    ${q.n?`<div class="note">${q.n}</div>`:''}
+  </div>
+  <div class="actions" style="margin-top:12px"><button class="btn" id="next">${last?'결과 보기':'다음 문제'}</button></div>`;
+  $('sc').textContent=`정답 ${score}`;
+  const n=$('next');n.addEventListener('click',()=>{idx++;render()});n.focus();
+}
+function result(){
+  const list=Q[set];
+  const pattern=summarize();
+  stage.innerHTML=`<div class="card result">
+    <h2>결과</h2>
+    <div class="score">${score} / ${list.length}</div>
+    ${pattern}
+    ${misses.length?`<ul class="misslist">${misses.map(m=>`<li><div>${m.q.src}. ${m.q.t}</div><div class="ans">내 답: ${m.mine} · 정답: ${LABEL[m.q.b+m.q.s]} (${m.q.w})</div></li>`).join('')}</ul>`:'<p>전부 맞혔어요. 판별 공식이 손에 붙었어요.</p>'}
+    <div class="actions"><button class="btn ghost" id="again">다시 풀기</button></div>
+  </div>`;
+  $('again').addEventListener('click',()=>start(set));
+}
+function summarize(){
+  if(!misses.length)return'';
+  let sign=0,dir=0;
+  misses.forEach(m=>{const c=m.q.b+m.q.s,mine=Object.keys(LABEL).find(k=>LABEL[k]===m.mine);
+    if(mine[0]!==c[0]||mine.slice(0,-1)!==c.slice(0,-1))dir++;
+    if(mine.slice(-1)!==c.slice(-1))sign++;});
+  const tips=[];
+  if(sign)tips.push(`정적/부적을 ${sign}번 헷갈렸어요. 좋다/나쁘다 대신 "등장했나, 퇴장했나?"로 물어보세요.`);
+  if(dir)tips.push(`강화/처벌을 ${dir}번 헷갈렸어요. 마지막 문장의 "늘었다/줄었다"만 보세요.`);
+  return `<div class="note">${tips.join('<br>')}</div>`;
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>start(t.dataset.set)));
+try{if(window.matchMedia("(max-width:480px)").matches)$("rule").open=false}catch(e){}
+render();
+</script>
+
+</html>
