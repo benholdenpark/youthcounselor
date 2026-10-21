@@ -33,7 +33,20 @@ h1{font-family:var(--display);font-size:1.9rem;line-height:1.25;margin:0;text-wr
 .sub{color:var(--muted);margin:4px 0 0}
 .eyebrow{font-size:.78rem;letter-spacing:.08em;color:var(--accent);font-weight:600}
 .rule{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.rule summary{cursor:pointer;font-weight:600}
+.rule{background:var(--accent-soft);border-color:var(--accent)}
+.rule summary{cursor:pointer;font-weight:600;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--accent);-webkit-tap-highlight-color:transparent}
+.rule summary::-webkit-details-marker{display:none}
+.rule summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:6px}
+.rule .ttl{display:flex;align-items:center;gap:8px;font-size:1.02rem}
+.rule .hint{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;background:var(--accent);color:var(--surface);padding:5px 10px 5px 12px;border-radius:999px;white-space:nowrap}
+.rule .chev{width:14px;height:14px;transition:transform .2s}
+.rule[open] .chev{transform:rotate(180deg)}
+.rule .when-open{display:none}
+.rule[open] .when-open{display:inline}
+.rule[open] .when-closed{display:none}
+.rule[open] summary{padding-bottom:10px;border-bottom:1px solid var(--accent);margin-bottom:4px}
+.rule ol,.rule .matrix{color:var(--ink)}
+.rule .matrix td{background:var(--surface)}
 .rule ol{margin:10px 0 0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
 .matrix{margin-top:12px;overflow-x:auto}
 .matrix table{border-collapse:collapse;width:100%;font-size:.92rem;table-layout:fixed}
@@ -86,7 +99,7 @@ h1{font-family:var(--display);font-size:1.9rem;line-height:1.25;margin:0;text-wr
   </header>
 
   <details class="rule" id="rule" open>
-    <summary>판별 공식</summary>
+    <summary><span class="ttl">판별 공식</span><span class="hint"><span class="when-closed">펼쳐 보기</span><span class="when-open">접기</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></summary>
     <ol>
       <li><b>마지막 문장 끝 단어</b>를 본다. "늘었다" → <b>강화</b>, "줄었다" → <b>처벌</b></li>
       <li>결과로 무언가가 <b>등장</b>했나, <b>퇴장</b>했나? 등장 → <b>정적(＋)</b>, 퇴장 → <b>부적(−)</b></li>
